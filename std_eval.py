@@ -1,4 +1,5 @@
 import torch
+from visuallize import process_and_plot,process_and_plot_ecg
 torch.autograd.set_detect_anomaly(True)
 import random
 from tqdm import tqdm
@@ -43,9 +44,9 @@ def pad_along_axis(array: np.ndarray, target_length: int, axis: int = 0) -> np.n
 
     return np.pad(array, pad_width=npad, mode='constant', constant_values=0)
 
-def eval_diffusion(window_size, EVAL_DATASETS, nT=10, batch_size=512, PATH="../../ingenuity_NAS/21ds94_nas/21ds94_mount/AAAI24/public_checkpoints/", device="cuda"):
+def eval_diffusion(window_size, EVAL_DATASETS, nT=10, dest = 'PPG', batch_size=512, PATH="./models/BCG2PPG", device="cuda"):
 
-    _, dataset_test = get_datasets(datasets=EVAL_DATASETS, window_size=window_size)
+    _,_, dataset_test = get_datasets(datasets=EVAL_DATASETS, window_size=window_size)
 
     testloader = DataLoader(dataset_test, batch_size=batch_size, shuffle=True, num_workers=64)
 
@@ -56,14 +57,16 @@ def eval_diffusion(window_size, EVAL_DATASETS, nT=10, batch_size=512, PATH="../.
         device="cuda"
     )
     
-    dpm = nn.DataParallel(dpm)
-    Conditioning_network1 = nn.DataParallel(Conditioning_network1)
-    Conditioning_network2 = nn.DataParallel(Conditioning_network2)
+    # Model parallelization and evaluation mode
+    if torch.cuda.device_count() > 1:
+        dpm = nn.DataParallel(dpm)
+        Conditioning_network1 = nn.DataParallel(Conditioning_network1)
+        Conditioning_network2 = nn.DataParallel(Conditioning_network2)
 
     dpm.eval()
     Conditioning_network1.eval()
     Conditioning_network2.eval()
-
+    i = 1
     with torch.no_grad():
 
         fd_list = []
@@ -77,7 +80,7 @@ def eval_diffusion(window_size, EVAL_DATASETS, nT=10, batch_size=512, PATH="../.
             x_ppg = x_ppg.float().to(device)
             y_ecg = y_ecg.float().to(device)
             ecg_roi = ecg_roi.float().to(device)
-
+            y_ecg_numpy = y_ecg.cpu().numpy()
             generated_windows = []
 
             for ppg_window in torch.split(x_ppg, 128*4, dim=-1):
@@ -88,16 +91,31 @@ def eval_diffusion(window_size, EVAL_DATASETS, nT=10, batch_size=512, PATH="../.
 
                 ppg_conditions1 = Conditioning_network1(ppg_window)
                 ppg_conditions2 = Conditioning_network2(ppg_window)
-
+                ppg_window_numpy = ppg_window.cpu().numpy()
                 xh = dpm(
                     cond1=ppg_conditions1, 
                     cond2=ppg_conditions2, 
                     mode="sample", 
                     window_size=128*4
                 )
-                
+                xh_numpy = xh.cpu().numpy()
+                if dest == 'PPG':
+                    #plot IMU, type表示要绘制的曲线类型
+                    process_and_plot(ppg_window_numpy,None, i,type='BCG',identifier=EVAL_DATASETS,output_dir='./figure/bcg-ppg')
+                    #plot generated PPG
+                    process_and_plot(xh_numpy,None,i,type='PPG',identifier=EVAL_DATASETS,output_dir='./figure/bcg-ppg')
+                    #plot ground-truth PPG
+                    process_and_plot(y_ecg_numpy,None,i,type='PPG',identifier=f'GT_{EVAL_DATASETS}',output_dir='./figure/bcg-ppg')                  
+                else:                   
+                    #plot PPG 
+                    process_and_plot(ppg_window_numpy,None, i,type='PPG',identifier=EVAL_DATASETS,output_dir='./figure/bcg-ppg')
+                    #plot generated ECG
+                    process_and_plot_ecg(xh_numpy,None,i,identifier=EVAL_DATASETS,output_dir='./figure/bcg-ppg')
+                    #plot ground-truth ECG
+                    process_and_plot_ecg(y_ecg_numpy,None,i,identifier=f'GT_{EVAL_DATASETS}',output_dir='./figure/bcg-ppg')
                 generated_windows.append(xh.cpu().numpy())
-
+                i = i + 1
+                
             xh = np.concatenate(generated_windows, axis=-1)[:, :, :128*window_size]
 
             fd = calculate_FD(y_ecg, torch.from_numpy(xh).to(device))
@@ -125,24 +143,25 @@ if __name__ == "__main__":
         "nT": 10,
         "device": "cuda",
         "window_size": 4, # Seconds
-        "eval_datasets": ["WESAD"]
+        "eval_datasets": ["bcg"]
     }
 
     # TABLE 1 results
     print("\n******* Standard evaluation (Table 1) results *******")
-    for dataset_name in ["WESAD", "CAPNO", "DALIA", "BIDMC", "MIMIC-AFib"]:
+    for dataset_name in ["bcg"]:
         
         tracked_metrics = eval_diffusion(
             window_size=4,
             EVAL_DATASETS=[dataset_name],
             nT=10,
+            dest = 'PPG'
         )
         print(f"\n{dataset_name}: RMSE is {tracked_metrics['RMSE_score']}, FD is {tracked_metrics['FD']}")
         print("-"*1000)
 
     # TABLE 2 results
     print("\n******* Heart Rate estimation (Table 2) results *******")
-    for dataset_name in ["WESAD", "DALIA"]:
+    for dataset_name in ["bcg"]:
         
         tracked_metrics = eval_diffusion(
             window_size=8,
