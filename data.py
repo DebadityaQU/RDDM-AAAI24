@@ -24,11 +24,20 @@ class IMUDataset(Dataset):
         # Create a numpy array for ROI regions with the same shape as ECG
         ppg_roi_array = np.zeros_like(ppg.reshape(1, window_size))
 
-        # Iterate through ECG R peaks and set values to 1 within the ROI regions
-        roi_size = 32
+        # 修改了PPG的ROI选择逻辑：扩大了ROI区域
+        # ROI参数
+        roi_size = 96  # 总ROI大小
+        pre_peak = 32  # 峰值前的采样点数
+        post_peak = 64  # 峰值后的采样点数
+
         for peak in info["PPG_Peaks"]:
-            roi_start = max(0, peak - roi_size // 2)
-            roi_end = min(roi_start + roi_size, window_size)
+            # 使用max确保roi_start不会小于0
+            roi_start = max(0, peak - pre_peak)
+
+            # 使用min确保roi_end不会超过信号长度
+            roi_end = min(peak + post_peak, window_size)
+
+            # 将ROI区域标记为1
             ppg_roi_array[0, roi_start:roi_end] = 1
 
         return ppg.reshape(1, window_size).copy(), imu.reshape(1, window_size).copy(), ppg_roi_array.copy() #, ppg_cwt.copy()
@@ -72,8 +81,8 @@ def get_datasets(
     DATA_PATH = "./dataset/", 
     datasets=["bcg"],
     window_size=4,
-    source = 'ppg',
-    dest = 'ecg'
+    source = 'bcg',
+    dest = 'ppg'
     ):
 
     dest_train_list = []

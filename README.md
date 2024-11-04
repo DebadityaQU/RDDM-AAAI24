@@ -13,7 +13,13 @@ Pritam Sarkar
 Ali Etemad
 </h3>
 
-
+### 使用说明
+1. 本程序用于 IMU->PPG 或 PPG->ECG, 所有函数中默认的转换模式是IMU->PPG。因此切换Source与Dest时需要修改一些参数：<br>
+所有程序默认source是bcg, dest是ppg
+训练时：<br>
+train.py: get_datasets(source='bcg',dest='ppg')
+<br>
+评估时：<br>
 ### Updates
 - [x] Paper
 - [x] RDDM algorithm

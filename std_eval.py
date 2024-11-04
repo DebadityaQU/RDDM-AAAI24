@@ -44,7 +44,7 @@ def pad_along_axis(array: np.ndarray, target_length: int, axis: int = 0) -> np.n
 
     return np.pad(array, pad_width=npad, mode='constant', constant_values=0)
 
-def eval_diffusion(window_size, EVAL_DATASETS, nT=10, dest = 'PPG', batch_size=512, PATH="./models/BCG2PPG", device="cuda"):
+def eval_diffusion(window_size, EVAL_DATASETS, nT=20, dest = 'PPG', batch_size=512, PATH="./models/BCG2PPG", device="cuda"):
 
     _,_, dataset_test = get_datasets(datasets=EVAL_DATASETS, window_size=window_size)
 
@@ -154,7 +154,7 @@ if __name__ == "__main__":
             window_size=4,
             EVAL_DATASETS=[dataset_name],
             nT=10,
-            dest = 'PPG'
+            dest = 'ECG'
         )
         print(f"\n{dataset_name}: RMSE is {tracked_metrics['RMSE_score']}, FD is {tracked_metrics['FD']}")
         print("-"*1000)

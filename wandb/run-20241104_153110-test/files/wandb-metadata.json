@@ -1,0 +1,32 @@
+{
+  "os": "Windows-10-10.0.22631-SP0",
+  "python": "3.11.10",
+  "startedAt": "2024-11-04T07:31:10.955890Z",
+  "program": "e:\\PythonCode\\RDDM-git\\RDDM\\train.py",
+  "codePath": "train.py",
+  "git": {
+    "remote": "https://github.com/BugHunterCaiXuan/RDDM.git",
+    "commit": "8945824abc724fc962e57ac4f7601f159b4627d8"
+  },
+  "email": "850056361@qq.com",
+  "root": "E:\\PythonCode\\RDDM-git\\RDDM",
+  "host": "KimsPC",
+  "username": "85005",
+  "executable": "C:\\Users\\85005\\.conda\\envs\\RDDM\\python.exe",
+  "codePathLocal": "train.py",
+  "cpu_count": 14,
+  "cpu_count_logical": 20,
+  "disk": {
+    "/": {
+      "total": "214750208000",
+      "used": "144027922432"
+    }
+  },
+  "memory": {
+    "total": "16831614976"
+  },
+  "cpu": {
+    "count": 14,
+    "countLogical": 20
+  }
+}
