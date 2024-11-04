@@ -1,0 +1,46 @@
+_wandb:
+    value:
+        cli_version: 0.18.2
+        m: []
+        python_version: 3.11.10
+        t:
+            "1":
+                - 1
+                - 5
+                - 53
+                - 55
+            "2":
+                - 1
+                - 5
+                - 53
+                - 55
+            "3":
+                - 14
+                - 16
+                - 23
+                - 55
+            "4": 3.11.10
+            "5": 0.18.2
+            "8":
+                - 3
+                - 5
+            "12": 0.18.2
+            "13": windows-amd64
+PATH:
+    value: ./models/
+alpha1:
+    value: 100
+alpha2:
+    value: 10
+attention_heads:
+    value: 8
+batch_size:
+    value: 512
+cond_mask:
+    value: 0
+device:
+    value: cuda
+n_epoch:
+    value: 150
+nT:
+    value: 20

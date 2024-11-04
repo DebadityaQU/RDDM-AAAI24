@@ -5,6 +5,47 @@ import neurokit2 as nk
 import sklearn.preprocessing as skp
 from torch.utils.data import Dataset, DataLoader
 
+class IMUDataset(Dataset):
+    def __init__(self, imu_data, ppg_data):
+        self.imu_data = imu_data
+        self.ppg_data = ppg_data
+
+    def __getitem__(self, index):
+
+        imu = self.imu_data[index]
+        ppg = self.ppg_data[index]
+        
+        window_size = ppg.shape[-1]
+
+        ppg = nk.ppg_clean(ppg.reshape(window_size), sampling_rate=128)
+        imu = nk.ppg_clean(imu.reshape(window_size), sampling_rate=128)
+        _, info = nk.ppg_peaks(ppg.reshape(window_size), sampling_rate=128, method="elgendi")
+
+        # Create a numpy array for ROI regions with the same shape as ECG
+        ppg_roi_array = np.zeros_like(ppg.reshape(1, window_size))
+
+        # 修改了PPG的ROI选择逻辑：扩大了ROI区域
+        # ROI参数
+        roi_size = 96  # 总ROI大小
+        pre_peak = 32  # 峰值前的采样点数
+        post_peak = 64  # 峰值后的采样点数
+
+        for peak in info["PPG_Peaks"]:
+            # 使用max确保roi_start不会小于0
+            roi_start = max(0, peak - pre_peak)
+
+            # 使用min确保roi_end不会超过信号长度
+            roi_end = min(peak + post_peak, window_size)
+
+            # 将ROI区域标记为1
+            ppg_roi_array[0, roi_start:roi_end] = 1
+
+        return ppg.reshape(1, window_size).copy(), imu.reshape(1, window_size).copy(), ppg_roi_array.copy() #, ppg_cwt.copy()
+
+    def __len__(self):
+        return len(self.ecg_data)
+
+
 class ECGDataset(Dataset):
     def __init__(self, ecg_data, ppg_data):
         self.ecg_data = ecg_data
@@ -37,42 +78,69 @@ class ECGDataset(Dataset):
         return len(self.ecg_data)
 
 def get_datasets(
-    DATA_PATH = "../../ingenuity_NAS/21ds94_nas/21ds94_mount/AAAI24/datasets/", 
-    datasets=["BIDMC", "CAPNO", "DALIA", "MIMIC-AFib", "WESAD"],
+    DATA_PATH = "./dataset/", 
+    datasets=["bcg"],
     window_size=4,
+    source = 'bcg',
+    dest = 'ppg'
     ):
 
-    ecg_train_list = []
-    ppg_train_list = []
-    ecg_test_list = []
-    ppg_test_list = []
+    dest_train_list = []
+    source_train_list = []
+    dest_test_list = []
+    source_test_list = []
     
     for dataset in datasets:
 
-        ecg_train = np.load(DATA_PATH + dataset + f"/ecg_train_{window_size}sec.npy", allow_pickle=True).reshape(-1, 128*window_size)
-        ppg_train = np.load(DATA_PATH + dataset + f"/ppg_train_{window_size}sec.npy", allow_pickle=True).reshape(-1, 128*window_size)
+        dest_train = np.load(DATA_PATH + dataset + f"/{dest}_train_{window_size}sec.npy", allow_pickle=True).reshape(-1, 128*window_size)
+        source_train = np.load(DATA_PATH + dataset + f"/{source}_train_{window_size}sec.npy", allow_pickle=True).reshape(-1, 128*window_size)
         
-        ecg_test = np.load(DATA_PATH + dataset + f"/ecg_test_{window_size}sec.npy", allow_pickle=True).reshape(-1, 128*window_size)
-        ppg_test = np.load(DATA_PATH + dataset + f"/ppg_test_{window_size}sec.npy", allow_pickle=True).reshape(-1, 128*window_size)
+        dest_test = np.load(DATA_PATH + dataset + f"/{dest}_test_{window_size}sec.npy", allow_pickle=True).reshape(-1, 128*window_size)
+        source_test = np.load(DATA_PATH + dataset + f"/{source}_test_{window_size}sec.npy", allow_pickle=True).reshape(-1, 128*window_size)
 
-        ecg_train_list.append(ecg_train)
-        ppg_train_list.append(ppg_train)
-        ecg_test_list.append(ecg_test)
-        ppg_test_list.append(ppg_test)
+        dest_train_list.append(dest_train)
+        source_train_list.append(source_train)
+        dest_test_list.append(dest_test)
+        source_test_list.append(source_test)
 
-    ecg_train = np.nan_to_num(np.concatenate(ecg_train_list).astype("float32"))
-    ppg_train = np.nan_to_num(np.concatenate(ppg_train_list).astype("float32"))
+    dest_train = np.nan_to_num(np.concatenate(dest_train_list).astype("float32"))
+    source_train = np.nan_to_num(np.concatenate(source_train_list).astype("float32"))
 
-    ecg_test = np.nan_to_num(np.concatenate(ecg_test_list).astype("float32"))
-    ppg_test = np.nan_to_num(np.concatenate(ppg_test_list).astype("float32"))
-
-    dataset_train = ECGDataset(
-        skp.minmax_scale(ecg_train, (-1, 1), axis=1),
-        skp.minmax_scale(ppg_train, (-1, 1), axis=1)
-    )
-    dataset_test = ECGDataset(
-        skp.minmax_scale(ecg_test, (-1, 1), axis=1),
-        skp.minmax_scale(ppg_test, (-1, 1), axis=1)
-    )
-
-    return dataset_train, dataset_test
+    dest_test = np.nan_to_num(np.concatenate(dest_test_list).astype("float32"))
+    source_test = np.nan_to_num(np.concatenate(source_test_list).astype("float32"))
+    
+    # Splitting test data into validation and test sets (50% each)
+    num_test_samples = dest_test.shape[0]
+    split_idx = num_test_samples // 2
+    
+    dest_val, dest_test = dest_test[:split_idx], dest_test[split_idx:]
+    source_val, source_test = source_test[:split_idx], source_test[split_idx:]
+    if dest == 'ecg':        
+        dataset_train = ECGDataset(
+            skp.minmax_scale(dest_train, (-1, 1), axis=1),
+            skp.minmax_scale(source_train, (-1, 1), axis=1)
+        )
+        
+        dataset_val = ECGDataset(
+        skp.minmax_scale(dest_val, (-1, 1), axis=1),
+        skp.minmax_scale(source_val, (-1, 1), axis=1)
+        )
+        
+        dataset_test = ECGDataset(
+            skp.minmax_scale(dest_test, (-1, 1), axis=1),
+            skp.minmax_scale(source_test, (-1, 1), axis=1)
+        )
+    else:
+        dataset_train = IMUDataset(
+            skp.minmax_scale(dest_train, (-1, 1), axis=1),
+            skp.minmax_scale(source_train, (-1, 1), axis=1)
+        )
+        dataset_val = IMUDataset(
+        skp.minmax_scale(dest_val, (-1, 1), axis=1),
+        skp.minmax_scale(source_val, (-1, 1), axis=1)
+        )
+        dataset_test = IMUDataset(
+            skp.minmax_scale(dest_test, (-1, 1), axis=1),
+            skp.minmax_scale(source_test, (-1, 1), axis=1)
+        )
+    return dataset_train, dataset_val, dataset_test
